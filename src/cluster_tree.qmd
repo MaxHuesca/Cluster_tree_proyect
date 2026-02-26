@@ -1,0 +1,100 @@
+
+First we load all the packages needed for running the clustering  
+
+```{r}
+#make all the inputs
+library(cluster)
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(dendextend))
+suppressPackageStartupMessages(library(ape))
+suppressPackageStartupMessages(library(corrplot))
+#We read the previous generated distance matrix
+mtrx_dis <- read.table(
+  "results/dist_matrix.tsv",
+  header = TRUE,
+  sep = "\t",
+  row.names = 1
+)
+dist_obj <- as.dist(mtrx_dis)
+
+head(mtrx_dis)
+``` 
+
+
+### Functions 
+
+```{r}
+plot_scat <- function(){
+
+
+
+
+}
+
+
+
+
+
+save_tree <- function(,save=TRUE){
+    plot(wClust, hang = -1, main = "Ward Dendogram")
+    fviz_cluster(list(data = InputData, cluster = cls3)) 
+    #Save tree in Newick format
+    my_tree <- as.phylo(ccom)
+    #we can save it as a format we can visualize with programs like fig_tree
+    write.tree(phy = my_tree, file = "results/ejemplo_clase.tree")
+}
+```
+
+### Predict the clusters 
+
+Now we can use diferent methods for try to determine the number of clusters in the data 
+```{r}
+fviz_nbclust(
+  mtrx_dis,
+  FUN = hcut,
+  hc_method = "ward.D2",
+  method = "gap_stat",
+  k.max = 6
+) +
+  labs(subtitle = "The Elbow Method")
+
+fviz_nbclust(
+  mtrx_dis,
+  FUN = hcut,
+  hc_method = "ward.D2",
+  method = "wss",
+  k.max = 6
+) +
+  labs(subtitle = "The Elbow Method")
+
+fviz_nbclust(
+  mtrx_dis,
+  FUN = hcut,
+  hc_func = "hclust",
+  hc_method = "ward.D2",
+  method = "silhouette",
+  k.max = 6
+) +
+  labs(subtitle = "Silhouette method")
+```
+
+### Make clusters  
+Now we are going to test hirechical clusters methods to asses for the clusters 
+
+
+```{r}
+methods_clust <- c("ward.D2", "complete", "single", "average") 
+res_coef <- c(1:4) 
+names(res_coef) <- methods_clust
+for(clust_met in methods_clust){
+    #clust the distance object data with the method in the iteration
+    clust_t <- hclust(dist_obj, method = clust_met)
+    #save the Agglomerative coeficent 
+    res_coef[clust_met] <- coef(clust_t) 
+    plot(clust_t, hang = -1, main = paste("Dendogram", clust_met))
+}
+
+
+
+
+```
