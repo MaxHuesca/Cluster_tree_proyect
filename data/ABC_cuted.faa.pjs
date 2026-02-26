@@ -1,0 +1,24 @@
+{
+  "version": "1.2",
+  "dbname": "ABC_cuted.faa",
+  "dbtype": "Protein",
+  "db-version": 5,
+  "description": "../data/ABC_cuted.faa",
+  "number-of-letters": 14557,
+  "number-of-sequences": 100,
+  "last-updated": "2026-02-25T21:48:00",
+  "number-of-volumes": 1,
+  "bytes-total": 73894,
+  "bytes-to-cache": 15570,
+  "files": [
+    "ABC_cuted.faa.pdb",
+    "ABC_cuted.faa.phr",
+    "ABC_cuted.faa.pin",
+    "ABC_cuted.faa.pog",
+    "ABC_cuted.faa.pos",
+    "ABC_cuted.faa.pot",
+    "ABC_cuted.faa.psq",
+    "ABC_cuted.faa.ptf",
+    "ABC_cuted.faa.pto"
+  ]
+}

@@ -1,11 +1,17 @@
 #!/bin/bash
-set -eou pipefail
+#$ -N create_score_tabb
+#$ -S /bin/bash
+#$ -o salida-$JOB_NAME-$JOB_ID.out
+#$ -e salida-$JOB_NAME-$JOB_ID.err
+#$ -q default
+#$ -pe smp 8
+#$ -l h_rt=01:00:00
 
 #this program has the objective of create a tabular file after obtaining the local alignments usign blatp program 
 #Arguments  
-#$1 = file with the fasta sequences 
-#$2 = number of sequences you want to use from the fasta 
-#$3 (optional) = out dir 
+#	$1 = file with the fasta sequences 
+#	$2 = number of sequences you want to use from the fasta 
+#	$3 (optional) = out dir 
 
 #asign the variables 
 input_fasta=$1

@@ -69,8 +69,7 @@ def parser():
     """ 
     parser=ag.ArgumentParser(description="Parser to store all the args provided by comand line") 
     
-    parser.add_argument("-t", "--tsv",
-                            default="../results/citrocromeC_seq_hmmr_clean_aling_clean.tsv", 
+    parser.add_argument("-t", "--tsv", 
                             type=str, 
                             required=True, 
                             help="Path of the tsv file with the results of the alignment in the format query /t subject /t score") 
@@ -78,6 +77,10 @@ def parser():
                             type=str, 
                             required=True, 
                             help="Specify the way to build the matrix 'upp' for consider the query result over the subject (upper triangular), 'max' for consider the max result") 
+    parser.add_argument("-o", "--outB",
+                            default="", 
+                            type=str,  
+                            help="baseline for the out format ")
     args = parser.parse_args() 
     return args
 
@@ -93,6 +96,7 @@ def main():
     #now we can assigned them to a variable 
     flag_way = arguments.way 
     Df_raw = pd.read_csv(arguments.tsv, sep="\t",names=["query", "subject","score"])
+    out_base=arguments.outB
     
     #we obtain the matrix 
     mtrx_score=generate_mtrx(Df_raw, flag_way) 
@@ -102,9 +106,9 @@ def main():
     #finally save the files 
     mtrx_normalizada = mtrx_list[0]
     mtrx_distances = mtrx_list[1] 
-    mtrx_distances.to_csv("../results/dist_matrix.tsv", sep="\t")
-    mtrx_normalizada.to_csv("../results/nrom_matrix.tsv", sep="\t")
-    mtrx_score.to_csv("../results/score_matrix.tsv", sep="\t")
+    mtrx_distances.to_csv(f"../results/{out_base}_dist_matrix.tsv", sep="\t")
+    mtrx_normalizada.to_csv(f"../results/{out_base}_nrom_matrix.tsv", sep="\t")
+    mtrx_score.to_csv(f"../results/{out_base}_score_matrix.tsv", sep="\t")
 
 if __name__ == "__main__":
 	main() 
