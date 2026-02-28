@@ -1,0 +1,424 @@
+---
+format:
+  pdf:
+    toc: true
+    toc-depth: 5
+    fig-cap: true
+    keep-tex: true
+    number-sections: true
+    pdf-engine: xelatex
+    include-before-body: docs/portada.tex
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+fontsize: 12pt
+mainfont: "Times New Roman"
+lang: en
+header-includes:
+  - \usepackage{float}
+  - \usepackage{graphicx}
+  - \usepackage{geometry}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+--- 
+# Creating a dendrogram trees using blast alignments by diferent hierarchical cluster methods 
+
+## Introduction
+
+With the creation of human knowledge, it came out a necessity for clustering things and objects in order to understand in a better way the world and things that human beings see. That process involves selecting attributes from the objects that can discriminate them from others, so for that, it is very important to select those characteristics that can differentiate the parts of a set. Thus, that is one of the major challenges when we talk about the task of clustering things.
+
+Biology does not go far dealing with that problem; branches of this discipline face this problem every day. Things like the taxonomy features need to be precisely assigned in order to get into different sets all the living beings that biology can recover. Actually, something that has an enormous deal with that is all the biology tasks related to novel techniques like NGS applied to molecules like DNA and RNA, and also branches of the same tree related to other types of biomolecules like proteins (Proteomics).
+
+The objective of this project is to make a dendrogram by applying hierarchical clustering methods. This procedure allows us to do so because, different from the non-hierarchical algorithms, it solves all the possible number of cluster solutions for a given data set, same that can be related to its values with distances from each other. So these solutions provided can be represented as dendrograms where the branches are the distances between all the pairs.
+
+```{r}
+#| echo: false
+library(cluster)
+library(ggplot2)
+library(ggdendro)
+library(gridExtra)
+library(grid)
+library(ggtree)
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(dendextend))
+suppressPackageStartupMessages(library(ape))
+suppressPackageStartupMessages(library(corrplot))
+
+out_dir_plots <- ("results/plots/")
+if (!dir.exists(out_dir_plots)) {
+  dir.create(out_dir_plots, recursive = TRUE, showWarnings = FALSE)
+}
+
+save_multiplot <- function(plots_list, name_plot, colN = 4) {
+  out_dir_dendo <- ("results/plots/dendrograms/")
+  if (!dir.exists(out_dir_dendo)) {
+    dir.create(out_dir_dendo, recursive = TRUE, showWarnings = FALSE)
+  }
+  multi_plot <- arrangeGrob(
+    grobs = plots_list,
+    ncol = colN,
+    top = textGrob(
+      name_plot,
+      gp = gpar(fontsize = 16, fontface = "bold"),
+      y = unit(0.5, "npc")
+    )
+  )
+  ggsave(
+    filename = paste0(out_dir_dendo, name_plot, ".png"),
+    plot = multi_plot,
+    width = 18,
+    height = 10.5,
+    dpi = 300
+  )
+  grid::grid.newpage()
+  grid::grid.draw(multi_plot)
+}
+
+predict_clust <- function(data, method_i, hc_met = "ward.D2") {
+  plot_inf <- fviz_nbclust(
+    data,
+    FUN = hcut,
+    hc_func = "hclust",
+    hc_method = hc_met,
+    method = method_i,
+    k.max = 6
+  ) +
+    labs(subtitle = paste(method_i, "with", hc_met, "merge"))
+  return(plot_inf)
+}
+
+
+to_phylo <- function(clust_obj) {
+  #this function is vital to tranform the distance objects into phylo ones
+  if (inherits(clust_obj, "hclust")) {
+    return(as.phylo(clust_obj))
+  }
+
+  if (inherits(clust_obj, "agnes")) {
+    return(as.phylo(as.hclust(clust_obj)))
+  }
+
+  if (inherits(clust_obj, "diana")) {
+    return(as.phylo(as.hclust(clust_obj)))
+  }
+
+  stop("Tipo de objeto no soportado")
+}
+
+save_tree <- function(
+  clust_obj,
+  save = TRUE,
+  merg_met,
+  metadata = NULL
+) {
+  #tree as a phylo for ploting and could save it
+  phylo_obj <- to_phylo(clust_obj)
+
+  #make the base plot using  ggtree
+  tree_plot <- ggtree(phylo_obj) +
+    geom_tiplab(size = 2) +
+    ggtitle(merg_met) +
+    theme_tree2() +
+    theme(
+      plot.title = element_text(
+        hjust = 0.5,
+        face = "bold",
+        size = 12
+      ),
+      legend.title = element_text(size = 9),
+      legend.text = element_text(size = 8)
+    )
+  #Check if there was metadata specify for identifing clades
+  if (!is.null(metadata)) {
+    tree_plot %<+%
+      metadata +
+      geom_tippoint(aes(color = factor(clade)), size = 2)
+  }
+  if (save) {
+    out_dir_tree <- ("results/trees/")
+    if (!dir.exists(out_dir_tree)) {
+      dir.create(out_dir_tree, recursive = TRUE, showWarnings = FALSE)
+    }
+    #we can save it as a format we can visualize with programs like fig_tree
+    write.tree(
+      phy = phylo_obj,
+      file = paste(out_dir_tree, merg_met, "_dendrogram.nwk", sep = "")
+    )
+  }
+  return(tree_plot)
+}
+
+```
+
+
+## Selecting and parsing the data
+
+For this analysis we are going to use 3 different sets of data because of their nature:
+* First, we are analyzing the data set provided by ***Dr. Luis Arturo Medrano Soto*** that contains a set of 100 proteins that belong to the **ABC** family from which we can cluster 4 or 3 groups related to the domains embedded in those proteins.
+* In the second group, we have a set of 100 **H1** proteins from 4 different life clades (25 for each one):
+    * *Mammalia*
+    * *Protostomia*
+    * *Fungi*
+    * *Echinodermata*
+* Finally, we have a set of 100 **cytochrome C** proteins for which we do not have prior phylogenetic information.
+
+The two groups that were not provided by the course titular were extracted from [UniProt](https://www.uniprot.org/) and [EBI](https://www.ebi.ac.uk/interpro/) databases respectively. They were parsed for cleaning their headers using `awk` from the command line.
+
+```{bash}
+#| eval: false
+
+awk 'BEGIN{FS="|"} /^>/{print ">" $2; next} {print}' ../data/H1_seqs_raw.faa > ../data/H1_seqs.faa
+
+awk '/^>/{sub(/\|.*/,"",$0)}1' ../data/citrocromeC_seq_hmmr.faa > ../data/citrocromeC_seq_hmmr_clean.faa
+``` 
+
+After cleaning the headers, they are ready for the first step.
+
+## Blasting
+
+To access "distances" in our data, we perform alignments in an all-vs-all format. This was done with the suite [BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) using output format 7 in order to retain only the query, subject, and score columns. This is accessed through the script `src/create_tabular`; for more information, check this script. With this data, we can parse it to generate a matrix. The table can be seen as follows:
+
+```{python}
+# | echo: false
+import pandas as pd
+
+score_df = pd.read_csv("results/H1_seqs_aling.tsv", sep="\t")
+score_df.columns = ["query", "subject", "score"]
+score_df.head()
+``` 
+
+Once we have this TSV file, we can start with the matrix construction.
+
+## Matrix Construction
+
+The task of building the matrix is handled by the script `src/parsed_parseTabular.py`, which ensures that the matrix is constructed in a symmetric way and in two possible ways. First, considering the alignment where protein A is the query over the alignment where the same protein is the subject (option `upp` in the flag `-w`), and second, considering the alignment with the maximum score (option `max` in the flag `-w`).
+
+This script also normalizes the matrix using as the normalization factor the maximum score of the matrix without considering the diagonal values (because they correspond to self-self alignments, where the score is maximum and thus the distance is 0). After normalization, it generates a dissimilarity matrix by subtracting the normalized score from 1.
+$$
+1 - B_{i,j}
+$$ 
+
+```{python}
+# | echo: false
+import pandas as pd 
+
+disimilarity_df = pd.read_csv("results/H1_seqs_dist_matrix.tsv", sep="\t")
+disimilarity_df.head()
+```
+
+Having the dissimilarity matrix is crucial because it is the milestone for reading these objects with the `as.dist()` function in R, the language in which the following steps are performed.
+
+## Clustering
+
+When we talk about clustering, we can mention two main methods: hierarchical clustering and non-hierarchical clustering. In this analysis, we are using the first one to obtain all the clusters in which our data can be classified as a function of our selected variable (the distance in the form of a normalized score from an alignment). However, before performing clustering, the question of how many clusters our dataset can contain always arises. To answer this question, we can try to infer the number of clusters that our data heterogeneity could explain using different methods:
+
+#### Elbow (WSS)
+
+The Elbow method focuses on considering the sum of squared errors (SSE). By plotting these errors present in our data, we can try to identify abrupt changes in the tendency while assuming a number of clusters. It can also be modeled using a hierarchical clustering method, so the abrupt change can be viewed as an elbow in a decreasing plot; that is why the method is named this way. This elbow represents the inferred number of clusters our data contains.
+
+#### Silhouette
+
+This heuristic method consists of evaluating how similar an observation is to its own cluster. This can be accessed using distances and is compared with the distance to other clusters. From this, it obtains a silhouette coefficient. The plot explains the trend, and the peaks in the plot represent the inferred number of clusters. As with the Elbow method, it can use a hierarchical clustering method to model cluster formation.
+
+#### Gap (gap_stat)
+
+This heuristic method, unlike the two previous methods, quantifies the distribution of the variation across clusters by comparing it with the theoretical values of a uniform distribution. This can be done using a bootstrapping method.   
+
+### Results 
+```{r}
+#| echo: false
+
+#read all the data frames with the disimilar matrixes
+H1_Df <- read.csv(
+  "results/H1_seqs_dist_matrix.tsv",
+  sep = "\t",
+  header = TRUE,
+  row.names = 1
+)
+ABC_Df <- read.csv(
+  "results/ABC_fam_dist_matrix.tsv",
+  sep = "\t",
+  header = TRUE,
+  row.names = 1
+)
+Cit_Df <- read.csv(
+  "results/citocromeC_fam_dist_matrix.tsv",
+  sep = "\t",
+  header = TRUE,
+  row.names = 1
+)
+
+#store the raw objects in a list
+dist_list <- list(H1_Df, ABC_Df, Cit_Df)
+#define the names to have control of what we are ploting
+names(dist_list) <- c("H1", "ABC", "CitochromeC")
+#list with the merge methods and inference methods we are using
+merge_methods = c("ward.D2", "complete", "single", "average")
+infer_methods = c("gap_stat", "wss", "silhouette")
+
+for (dist_name in names(dist_list)) {
+  dist_obj <- dist_list[[dist_name]]
+  plots_list <- list()
+  for (met_i in infer_methods) {
+    for (met_m in merge_methods) {
+      plot_t <- predict_clust(dist_obj, met_i, met_m)
+      plot_name <- paste0(
+        "dist",
+        "_",
+        met_i,
+        "_",
+        met_m
+      )
+      plots_list[[plot_name]] <- plot_t
+    }
+  }
+
+  save_multiplot(
+    plots_list,
+    sprintf("Distance: %s | Inference: N clusters", dist_name)
+  )
+}
+
+```
+
+With these plots, we can infer a putative number of clusters in our data. The interpretation depends on the method plotted, and sometimes the method used to merge the clusters (criteria) also plays a role in the shape of the plot.
+
+#### ABC
+
+In this case, we previously knew the number of clusters that this dataset is supposed to have, and this is what we observed in the plots. Note that the first row, corresponding to the **gap** method, does not show conclusive results, because in none of the plots we can see the peak we are searching for. This changes in the **silhouette** plots, where we can see that the number of clusters around 4 is more homogeneous (merge methods *ward.D2*, *complete*). This is also reflected in the elbows observed for the **wss** method (*ward.D2*, *complete*). This gives us a more confident assumption that the ABC dataset has 4 clusters representing those protein sequences.
+
+#### H1
+
+In this set of proteins, we also know that the number of clusters is 4. We can note that the gap statistic method also fails to determine a conclusive number of inferred clusters, because we do not observe a dominant peak across those plots. This differs from the plots relative to the silhouette method, in which we can see more consistent peaks across the values 2 and 3, with the number of 2 clusters showing more evidence in the hierarchical clustering using the single merge method. Finally, we can identify a putative value between 2 and 3 clusters in the Elbow method.
+
+#### CytochromeC
+
+This could be the most interesting case because we do not have an a priori number of clusters. As in the two previous groups, we can see that the gap statistic method fails to provide conclusive numbers of clusters, as well as the wss method, where we cannot identify a remarkable elbow across the four plots. However, interestingly, in the silhouette method we can observe a consensus peak at 2 clusters, giving us insights into what we could see in the following dendrograms.
+
+## Dendrograms
+
+To construct the dendrograms, we are using a hierarchical clustering method with the objective of representing the distances stored in our distance matrix as a solution of all the possible clusters that these distances represent, as a function of an agglomerative or divisive method and its corresponding merge method.
+
+For this task, we are solving all the possible clusters for the three datasets using two agglomerative methods (`hclust`, `agnes`) and one divisive method (`diana`), together with the previous four merging methods. 
+
+```{r}
+out_dir_plots <- ("results/plots/dendrograms")
+if (!dir.exists(out_dir_plots)) {
+  dir.create(out_dir_plots, recursive = TRUE, showWarnings = FALSE)
+}
+#list for the all the distance objects
+H1_dist <- as.dist(H1_Df)
+#metadata for h1
+h1_meta <- read.csv(
+  "data/metadata_H1.tsv",
+  sep = "\t",
+  header = FALSE,
+  col.names = c("label", "clade")
+)
+h1_meta$clade <- as.factor(h1_meta$clade)
+ABC_dist <- as.dist(ABC_Df)
+Cit_dist <- as.dist(Cit_Df)
+distO_list <- list(H1_dist, ABC_dist, Cit_dist)
+names(distO_list) <- c("H1", "ABC", "CitochromeC")
+
+#iterate for all the cluster methods in our tree objects
+for (dist_name in names(distO_list)) {
+  #obatain the dist object
+  dist_obj <- distO_list[[dist_name]]
+
+  #create a list for storing the tree plots
+  tree_plots <- list()
+  multi_title <- paste(dist_name, "dendrograms", sep = "")
+  #dis named list would store each Aglomerative coeficent saved for every cluster metod
+  local_coef <- list()
+  names(local_coef) <- c()
+  #we assigned the metadata argument if we have loaded
+  if (dist_name == "H1") {
+    metadata_t = h1_meta
+  } else {
+    metadata_t = NULL
+  }
+  for (clust_met in merge_methods) {
+    #=====================================================================
+    #hclust
+    #=====================================================================
+    #clust the distance object data with the method in the iteration
+    clust_t <- hclust(dist_obj, method = clust_met)
+    #save the Agglomerative coeficent
+    local_coef[paste(dist_name, "_HC_tree_", clust_met, sep = "")] <- coef(
+      clust_t
+    )
+    plot_name <- paste(dist_name, "_hclust_tree_", clust_met, sep = "")
+    #plot and save the tree in the newick format
+    tree_plots[[plot_name]] <- save_tree(clust_t, TRUE, plot_name, metadata_t)
+    #=====================================================================
+    #agnes
+    #=====================================================================
+    tryCatch(
+      {
+        clust_t <- agnes(dist_obj, method = clust_met)
+        plot_name <- paste(dist_name, "_agnes_tree_", clust_met, sep = "")
+        tree_plots[[plot_name]] <- save_tree(
+          clust_t,
+          FALSE,
+          plot_name,
+          metadata_t
+        )
+        local_coef[paste(dist_name, "_AG_", clust_met, sep = "")] <- clust_t$ac
+      },
+      #if there no solution to the clustering method we save none in the Aglomerative coeficent
+      error = function(e) {
+        local_coef[paste("AG_", clust_met, sep = "")] <- "None"
+      }
+    )
+  }
+  #=====================================================================
+  #diana
+  #=====================================================================
+  #make the clustering by a Diana hirechal divisory method
+  dClust <- diana(dist_obj)
+  #plot the tree
+  plot_name <- paste(dist_name, "Diana_tree", sep = "")
+  #make the plot
+  tree_plots[["DIANA"]] <- save_tree(dClust, FALSE, plot_name, metadata_t)
+  #save the aglomerative coeficent
+  local_coef[paste(dist_name, "_Diana", sep = "")] <- dClust$dc
+  #=====================================================================
+  #Ploting
+  #=====================================================================
+  save_multiplot(tree_plots, multi_title)
+  print(paste("The aglomerative coeficents for", dist_name, "are:"))
+  print(local_coef)
+}
+```
+
+With these three hierarchical clustering methods, we can compare the differences across different heuristics for resolving the distance information present in our distance matrices. We can note a common tendency in these comparisons: even when different heuristics are used for the agglomerative methods, the topology depends more on the merge method. The `ward` method appears to be more informative in the three sets of proteins, even over the divisive methods. Here, we further break down the information.
+
+#### ABC
+
+We can see that the most informative dendrogram is the one corresponding to the `hclust` method with the `ward` merge strategy. This is because we can better discriminate inter-cluster distances, as the branches are more separated. This is consistent with the number of clusters we were expecting, probably with the closest ones being those corresponding to ABC2 "a" and "b". Therefore, we can interpret this dendrogram as the one that best represents the taxonomy of the proteins.
+
+In contrast, the least informative trees are those corresponding to the `single` merge method, which are also the ones with the lowest agglomerative coefficient (0.4836667). Note that their branches do not diverge enough to identify our initial four groups.
+
+#### H1
+
+In the H1 proteins, the most informative dendrogram is also the one that uses the `ward` merge method. In this case, we can discriminate between three major branches, suggesting that there are three groups in our data based on the distances present in our matrix, consistent with the results from the silhouette inference method. These results could be explained by the close phylogenetic distance between the *Protostomia* clade and the *Echinodermata* phylum, but this clustering evidence is not conclusive for such assumptions.
+
+Regarding the least informative dendrograms, there is a clear result: those produced by the `single` merge method. This is also reflected in its non-defined agglomerative coefficient, in contrast with the 0.9592296 coefficient corresponding to the `ward` merge method.
+
+#### CytochromeC
+
+Not surprisingly, we can identify as the most informative dendrogram the one calculated using the `ward` merge method, showing more divergent branches and discriminating between two major clusters, consistent with the **silhouette** inference method, but also suggesting 3 as a putative number of clusters. Note that, in contrast to the previous two datasets, this is not the one with the highest agglomerative coefficient (having 0.8447488).
+
+Interestingly, the ones with the highest coefficient (0.9586281) are the least informative trees, those calculated using the `single` merge method.
+
+## Discussion
+
+Clustering methods are a powerful tool to access analyses of differences in our data, but they are far from being conclusive methods for assessing biological assumptions. They must be used carefully and as complementary tools for confirmation or even hypothesis generation, requiring additional information to reach well-supported conclusions.
+
+In this particular case, the resolution of a dendrogram is not, in any way, a phylogenetic result. Rather, it is a way to explain variation in the distances obtained from normalized scores derived from BLAST alignments. In the cases where the expected clusters were explained (ABC and H1), we can see that choosing between agglomerative heuristics was less relevant than choosing the method by which clusters properly agglomerate. This teaches us that the way in which clusters are considered part of another, or not considered part of the same, is crucial, with methods that account for variation across clusters (such as the `ward` method) being more effective.
+
+Another important point when generating these dendrograms using hierarchical methods is that the agglomerative coefficient only reflects the confidence in the branch structure of the dendrogram, but it does not reflect the confidence we can have in the dendrogram topology itself when discussing biological assumptions.
+
+Finally, in this exercise, the inference method that showed the best performance across all datasets was the `silhouette` method.   

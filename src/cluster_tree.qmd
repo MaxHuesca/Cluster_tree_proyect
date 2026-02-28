@@ -1,3 +1,5 @@
+## Clusteing ditances from blastp results 
+In this qmd we are testing diferent methods od clustering to evalute distances that are obatin from alignments between homolpgs sequences, we previously need a disimilarity matrix for having the information to make a clustering and then acces a dendrogram.  
 
 First we load all the packages needed for running the clustering  
 
@@ -10,7 +12,7 @@ suppressPackageStartupMessages(library(ape))
 suppressPackageStartupMessages(library(corrplot))
 #We read the previous generated distance matrix
 mtrx_dis <- read.table(
-  "results/dist_matrix.tsv",
+  "results/H1_seqs_dist_matrix.tsv",
   header = TRUE,
   sep = "\t",
   row.names = 1
@@ -24,58 +26,52 @@ head(mtrx_dis)
 ### Functions 
 
 ```{r}
-plot_scat <- function(){
+plot_scat <- function() {}
 
-
-
-
+predict_clust <- function(data, method_i, hc_met = "ward.D2") {
+  plot_inf <- fviz_nbclust(
+    data,
+    FUN = hcut,
+    hc_func = "hclust",
+    hc_method = hc_met,
+    method = method_i,
+    k.max = 6
+  ) +
+    labs(subtitle = paste(method_i, "with", hc_met, "merge"))
+  print(plot_inf)
 }
 
 
+save_tree <- function(clust_obj, save = TRUE, name = "Tree") {
+  tree_plot <- plot(clust_obj, hang = -1, main = paste(name, "dendrogram"))
 
-
-
-save_tree <- function(,save=TRUE){
-    plot(wClust, hang = -1, main = "Ward Dendogram")
-    fviz_cluster(list(data = InputData, cluster = cls3)) 
+  #fviz_cluster(list(data = InputData, cluster = cls3))
+  print(tree_plot)
+  if (save) {
     #Save tree in Newick format
-    my_tree <- as.phylo(ccom)
+    my_tree <- as.phylo(tree_plot)
     #we can save it as a format we can visualize with programs like fig_tree
-    write.tree(phy = my_tree, file = "results/ejemplo_clase.tree")
+    write.tree(
+      phy = my_tree,
+      file = paste("results/", name, "_dendrogram.nwk", sep = "")
+    )
+  }
 }
 ```
 
 ### Predict the clusters 
 
 Now we can use diferent methods for try to determine the number of clusters in the data 
-```{r}
-fviz_nbclust(
-  mtrx_dis,
-  FUN = hcut,
-  hc_method = "ward.D2",
-  method = "gap_stat",
-  k.max = 6
-) +
-  labs(subtitle = "The Elbow Method")
+```{r} 
 
-fviz_nbclust(
-  mtrx_dis,
-  FUN = hcut,
-  hc_method = "ward.D2",
-  method = "wss",
-  k.max = 6
-) +
-  labs(subtitle = "The Elbow Method")
+merge_methods = c("ward.D2", "complete", "single", "average")
+infer_methods = c("gap_stat", "wss", "silhouette")
 
-fviz_nbclust(
-  mtrx_dis,
-  FUN = hcut,
-  hc_func = "hclust",
-  hc_method = "ward.D2",
-  method = "silhouette",
-  k.max = 6
-) +
-  labs(subtitle = "Silhouette method")
+for (met_i in infer_methods) {
+  for (met_m in merge_methods) {
+    predict_clust(mtrx_dis, met_i, met_m)
+  }
+}
 ```
 
 ### Make clusters  
@@ -83,18 +79,48 @@ Now we are going to test hirechical clusters methods to asses for the clusters
 
 
 ```{r}
-methods_clust <- c("ward.D2", "complete", "single", "average") 
-res_coef <- c(1:4) 
-names(res_coef) <- methods_clust
-for(clust_met in methods_clust){
-    #clust the distance object data with the method in the iteration
-    clust_t <- hclust(dist_obj, method = clust_met)
-    #save the Agglomerative coeficent 
-    res_coef[clust_met] <- coef(clust_t) 
-    plot(clust_t, hang = -1, main = paste("Dendogram", clust_met))
+merge_methods <- c()
+res_coef <- c()
+names(res_coef) <- merge_methods
+for (clust_met in merge_methods) {
+  #=====================================================================
+  #hclust
+  #=====================================================================
+  #clust the distance object data with the method in the iteration
+  clust_t <- hclust(dist_obj, method = clust_met)
+  #save the Agglomerative coeficent
+  res_coef[paste("HC_", clust_met, sep = "")] <- coef(clust_t)
+  save_tree(clust_t, FALSE, paste("hclust_tree_", clust_met, sep = ""))
+  #=====================================================================
+  #agnes
+  #=====================================================================
+  clust_t <- tryCatch(
+    {
+      agnes(dist_obj, method = clust_met)
+    },
+    error = function(e) NULL
+  )
+  #save the Agglomerative coeficent
+  tryCatch(
+    {
+      res_coef[paste("AG_", clust_met, sep = "")] <- clust_t$ac
+      pltree(
+        clust_t,
+        cex = 0.6,
+        hang = -1,
+        main = paste("AG_", clust_met, sep = "")
+      )
+    },
+    error = function(e) {
+      res_coef[paste("AG_", clust_met, sep = "")] <- "None"
+    }
+  )
 }
-
-
-
+#=====================================================================
+#diana
+#=====================================================================
+dClust <- diana(dist_obj)
+pltree(dClust, cex = 0.6, hang = -1, main = "Diana Dendrogram")
+res_coef["Diana"] <- dClust$dc
 
 ```

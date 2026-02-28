@@ -39,4 +39,7 @@ blastp -query "$fasta_cuted" -db "$fasta_cuted" -outfmt 7 -max_hsps 1 -use_sw_tb
 
 # make the tsv 
 out_tsv="${out_dir}/${out_baseline}_aling.tsv"
-awk 'BEGIN{FS=OFS="\t"} !/^#/ {print $1, $2, $12}' "$out_blast" > "$out_tsv"
+awk 'BEGIN{FS=OFS="\t"} !/^#/ {print $1, $2, $12}' "$out_blast" > "$out_tsv" 
+
+#finally we delete all the blast db files 
+rm -rf "${data_baseline}/*.*.*"
