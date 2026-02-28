@@ -34,6 +34,12 @@ The objective of this project is to make a dendrogram by applying hierarchical c
 
 ```{r}
 #| echo: false
+library(reticulate)
+use_condaenv(
+  "C:\\Users\\vrahu\\miniconda3\\envs\\bio_informatics/python.exe",
+  required = TRUE
+)
+py_config()
 library(cluster)
 library(ggplot2)
 library(ggdendro)
