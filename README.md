@@ -1,4 +1,7 @@
-# Creating dendrogram trees using blast alignments by diferent hierarchical cluster methods  
+# Creating dendrogram trees using blast alignments by diferent hierarchical cluster methods
+
+![git hub](https://img.shields.io/badge/github-repo-blue?style=plastic&logo=github) ![python](https://img.shields.io/badge/python-3.13.13-green?style=plastic&logo=python) ![R](https://img.shields.io/badge/R-4.4.3-%2344B7DB?style=plastic&logo=R) ![bash](https://img.shields.io/badge/bash-5.1.8-%236C7887?style=plastic&logo=gnubash&logoColor=white) 
+
 >Clustering module Bioinforamtics II
 >
 >Ismael Maximiliano De Los Santos Huesca
